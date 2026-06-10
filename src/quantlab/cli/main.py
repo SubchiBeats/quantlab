@@ -123,24 +123,41 @@ def init() -> None:
 # --------------------------------- data ----------------------------------
 
 @data_app.command("fetch")
-def data_fetch(symbols: list[str] = typer.Option(None, "--symbol", "-s")) -> None:
-    """Fetch daily history from Stooq (free, no key), validate, and curate."""
-    from quantlab.data.ingest import fetch_stooq, save_raw
+def data_fetch(
+    symbols: list[str] = typer.Option(None, "--symbol", "-s"),
+    source: str = typer.Option("tiingo", "--source", help="tiingo (adjusted, needs TIINGO_API_KEY) | stooq (no key)"),
+) -> None:
+    """Fetch daily history from a vendor, validate, and curate."""
+    import os
+
+    from quantlab.data.ingest import fetch_stooq, fetch_tiingo, save_raw
     from quantlab.foundation.config import DataConfig, _load_yaml
 
+    if source not in ("tiingo", "stooq"):
+        typer.secho(f"unknown source '{source}' (use tiingo or stooq)", fg=typer.colors.RED)
+        raise typer.Exit(1)
     paths = _paths()
     conn = _db(paths)
     if not symbols:
         symbols = DataConfig(**_load_yaml(paths.configs / "data.yaml")).universe
+    token = os.environ.get("TIINGO_API_KEY", "")
+    if source == "tiingo" and not token:
+        typer.secho("TIINGO_API_KEY is not set. Get a free key at https://www.tiingo.com, "
+                    "put it in .env, and retry (or use --source stooq).", fg=typer.colors.RED)
+        raise typer.Exit(1)
     for sym in symbols:
-        typer.echo(f"{sym}: fetching from Stooq...")
+        typer.echo(f"{sym}: fetching from {source}...")
         try:
-            df, raw = fetch_stooq(sym)
+            if source == "tiingo":
+                df, raw = fetch_tiingo(sym, token)
+                save_raw(paths.raw, "tiingo", sym, raw, ext="json")
+            else:
+                df, raw = fetch_stooq(sym)
+                save_raw(paths.raw, "stooq", sym, raw)
         except Exception as exc:  # noqa: BLE001 - report and continue with other symbols
             typer.secho(f"  {sym}: fetch failed: {exc}", fg=typer.colors.RED)
             continue
-        save_raw(paths.raw, "stooq", sym, raw)
-        _validate_and_store(paths, conn, sym, df, "stooq")
+        _validate_and_store(paths, conn, sym, df, source)
 
 
 @data_app.command("import-csv")

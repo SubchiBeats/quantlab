@@ -1,9 +1,16 @@
 # QuantLab
 
+![tests](https://github.com/SubchiBeats/quantlab/actions/workflows/ci.yml/badge.svg)
+
 Local-first quantitative research platform. **Research tool only** — Phase 1 contains no
 broker connectivity, no order routing, and no live trading of any kind. Its job is to help
 you research trading ideas and, more importantly, to make it structurally hard to fool
 yourself while doing it.
+
+This is not a money printer and doesn't claim to be one. Most strategies fail validation
+here — **that is the point**. The test suite asserts that a random strategy gets rejected,
+and the platform's own first demo strategy (out-of-sample Sharpe 1.06) was refused by the
+deflated-Sharpe gate as statistically indistinguishable from multiple-testing noise.
 
 Core principles (enforced by code, not convention):
 

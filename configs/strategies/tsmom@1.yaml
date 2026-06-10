@@ -1,0 +1,6 @@
+name: tsmom
+version: 1
+universe: [AAPL, MSFT, JNJ, XOM]
+params:
+  lookback: 252
+  skip: 21
