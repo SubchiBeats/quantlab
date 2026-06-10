@@ -18,8 +18,8 @@ def derive_seed(root_seed: int, *labels: str) -> int:
     for label in labels:
         h.update(b"|")
         h.update(label.encode())
-    # 8 bytes -> int in numpy's accepted seed range
-    return int.from_bytes(h.digest()[:8], "big")
+    # 63-bit value: positive, fits numpy seeds AND SQLite's signed 64-bit INTEGER
+    return int.from_bytes(h.digest()[:8], "big") & (2**63 - 1)
 
 
 def make_rng(seed: int) -> np.random.Generator:
