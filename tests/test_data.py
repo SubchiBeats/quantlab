@@ -32,11 +32,43 @@ def test_long_gap_detected():
     assert any(i.check == "gaps" and i.severity == "fail" for i in issues)
 
 
-def test_price_spike_detected():
+def test_bad_print_spike_detected():
+    # a single bar 4x too high reverts next day, on ORDINARY volume ->
+    # bad-print signature (price-feed error) -> fail
     df = _clean()
-    df.iloc[300, df.columns.get_indexer(["open", "high", "low", "close"])] *= 4.0
+    idx = df.columns.get_indexer(["open", "high", "low", "close"])
+    df.iloc[300, idx] *= 4.0
+    df.iloc[300, df.columns.get_loc("volume")] = int(df["volume"].iloc[280:300].median())
     issues = validate_frame(df, CFG)
     assert any(i.check == "spikes" and i.severity == "fail" for i in issues)
+
+
+def test_real_extreme_move_persistent_is_warn():
+    # a large move that PERSISTS (like a real crash/rally) must not block data
+    df = _clean()
+    idx = df.columns.get_indexer(["open", "high", "low", "close"])
+    df.iloc[300:, idx] *= 0.75
+    issues = validate_frame(df, CFG)
+    spike_issues = [i for i in issues if i.check == "spikes"]
+    assert spike_issues, "a 25% persistent drop should still be flagged"
+    assert all(i.severity != "fail" for i in spike_issues), "persistent move must be warn, not fail"
+    assert passes(issues), "a genuine market move must not fail validation"
+
+
+def test_crash_bounce_on_volume_surge_is_warn():
+    # a crash day + bounce next day (round-trip) BUT on a huge volume surge is a
+    # genuine market dislocation, not a data error -> warn, not fail
+    df = _clean()
+    idx = df.columns.get_indexer(["open", "high", "low", "close"])
+    df.iloc[300:, idx] *= 0.90          # -10% crash that mostly...
+    df.iloc[301:, idx] *= (1.0 / 0.92)  # ...bounces back the next day
+    vcol = df.columns.get_loc("volume")
+    df.iloc[300, vcol] = int(df["volume"].iloc[280:300].median() * 5)  # volume surge
+    df.iloc[301, vcol] = int(df["volume"].iloc[280:300].median() * 5)
+    issues = validate_frame(df, CFG)
+    spike_issues = [i for i in issues if i.check == "spikes"]
+    assert spike_issues
+    assert all(i.severity != "fail" for i in spike_issues), "volume-surge dislocation must be warn"
 
 
 def test_unadjusted_split_detected():

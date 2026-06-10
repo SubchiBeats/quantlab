@@ -106,27 +106,74 @@ def validate_frame(df: pd.DataFrame, cfg: DataValidationConfig) -> list[QualityI
                 QualityIssue("gaps", "info", f"{len(runs)} short gaps (holidays/halts), within limit")
             )
 
-    # Spike check: robust z-score of daily log returns
-    logret = np.log(df["close"]).diff().dropna()
-    if len(logret) > 20:
-        med = float(logret.median())
-        mad = float((logret - med).abs().median())
-        scale = mad * 1.4826 if mad > 0 else float(logret.std()) or 1e-9
+    # Spike check: robust z-score of daily log returns. We must distinguish two
+    # very different things a large move can be:
+    #   - BAD PRINT: an isolated price-feed error. It REVERSES the next day
+    #     (round-trips), trades on ORDINARY volume, and is extreme even against
+    #     its own LOCAL neighborhood (it sits in an otherwise calm window). Only
+    #     this combination is treated as a data error -> 'fail'.
+    #   - REAL EXTREME MOVE: e.g. the 2008 and 2020 crisis days, AAPL's 2000
+    #     profit warning (-52%), MSFT's +13%/-16% COVID whipsaw. Real
+    #     dislocations CLUSTER - they are surrounded by other large moves, so
+    #     they are NOT locally extreme - and they come with volume surges.
+    #     Genuine market history -> 'warn', never 'fail'.
+    # (Unadjusted splits are caught separately by the split-echo check below.)
+    logret = np.log(df["close"]).diff()
+    clean = logret.dropna()
+    if len(clean) > 20:
+        med = float(clean.median())
+        mad = float((clean - med).abs().median())
+        scale = mad * 1.4826 if mad > 0 else float(clean.std()) or 1e-9
         z = (logret - med).abs() / scale
-        hard = z[z > 2 * cfg.spike_zscore]
-        soft = z[(z > cfg.spike_zscore) & (z <= 2 * cfg.spike_zscore)]
-        if len(hard):
+        candidates = z[z > cfg.spike_zscore].dropna()
+        vol_median = df["volume"].rolling(20, min_periods=5).median()
+        bad_prints: list[pd.Timestamp] = []
+        real_moves: list[pd.Timestamp] = []
+        values = logret.to_numpy()
+        for ts in candidates.index:
+            i = int(logret.index.get_loc(ts))
+            this = values[i]
+            nxt = values[i + 1] if i + 1 < len(values) else 0.0
+            round_trip = this * nxt < 0 and abs(this + nxt) < 0.4 * abs(this)
+
+            med_vol = vol_median.iloc[i]
+            vol_surge = bool(med_vol > 0 and df["volume"].iloc[i] > 1.5 * med_vol)
+
+            # local robustness: extreme even vs the +/-10-bar neighborhood?
+            # real dislocations cluster (neighbors also volatile) -> modest
+            # local z; an isolated glitch in a calm window -> huge local z.
+            lo, hi = max(0, i - 10), min(len(values), i + 11)
+            local = np.concatenate([values[lo:i], values[i + 1 : hi]])
+            local = local[~np.isnan(local)]
+            if len(local) >= 5:
+                lmed = float(np.median(local))
+                lmad = float(np.median(np.abs(local - lmed))) * 1.4826
+                local_z = abs(this - lmed) / lmad if lmad > 0 else float("inf")
+            else:
+                local_z = float("inf")
+
+            # a data error reverses, on ordinary volume, AND is locally isolated
+            if round_trip and not vol_surge and local_z > cfg.spike_zscore:
+                bad_prints.append(ts)
+            else:
+                real_moves.append(ts)
+        if bad_prints:
             issues.append(
                 QualityIssue(
                     "spikes", "fail",
-                    f"{len(hard)} returns beyond {2 * cfg.spike_zscore:.0f} robust z "
-                    f"(max z={float(z.max()):.1f}); likely bad prints or unadjusted actions",
-                    _iso(hard.index[0]), _iso(hard.index[-1]),
+                    f"{len(bad_prints)} single-day spike(s) that reverse the next day "
+                    f"(bad-print signature) - inspect/repair before use",
+                    _iso(bad_prints[0]), _iso(bad_prints[-1]),
                 )
             )
-        elif len(soft):
+        if real_moves:
             issues.append(
-                QualityIssue("spikes", "warn", f"{len(soft)} returns beyond {cfg.spike_zscore:.0f} robust z")
+                QualityIssue(
+                    "spikes", "warn",
+                    f"{len(real_moves)} large but persistent move(s) beyond "
+                    f"{cfg.spike_zscore:.0f} robust z (kept as genuine market events)",
+                    _iso(real_moves[0]), _iso(real_moves[-1]),
+                )
             )
 
     # Split echo: close ratio near 1/2, 1/3, 2, 3 with volume spike
