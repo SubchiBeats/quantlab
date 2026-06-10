@@ -1,0 +1,7 @@
+# QuantLab global configuration.
+# All timestamps in the platform are UTC; this value is validated, not optional.
+timezone: UTC
+log_level: INFO
+# Root seed for the platform. Every stochastic component derives its own seed
+# from this via foundation.rng.derive_seed, so one number reproduces everything.
+root_seed: 20260610

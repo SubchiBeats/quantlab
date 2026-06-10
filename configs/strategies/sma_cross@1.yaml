@@ -1,0 +1,9 @@
+# Strategy instance config. `params` must be drawn from the declared parameter
+# space in the strategy class (enforced at load) - this is how the platform
+# counts the size of the search space for multiple-testing corrections.
+name: sma_cross
+version: 1
+universe: [AAPL, MSFT, JNJ, XOM]
+params:
+  fast: 20
+  slow: 100

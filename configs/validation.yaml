@@ -1,0 +1,26 @@
+# Validation battery configuration: walk-forward, Monte Carlo, rejection gates.
+walkforward:
+  scheme: rolling                 # only legal value in v1
+  train_bars: 756                 # ~3 years of daily bars
+  test_bars: 126                  # ~6 months
+  embargo_bars: auto              # auto = strategy warm-up length
+
+montecarlo:
+  n_paths: 2000
+  block_len: auto                 # auto = ceil(sqrt(T)) bars
+  ruin_drawdown_pct: 15.0         # drawdown depth treated as 'ruin' for risk-of-ruin
+  cost_stress_multipliers: [1.0, 1.5, 2.0, 3.0]
+  delay_stress_bars: [1]          # extra bars of execution delay beyond next-open
+  perturbation_samples: 8         # neighbor parameter sets to test
+
+gates:
+  # A strategy is REJECTED (verdict=fail) if any gate fails. Pre-registered;
+  # changing these after seeing results is goalpost-moving - don't.
+  min_oos_trades: 30
+  min_wf_efficiency: 0.5          # OOS Sharpe / IS Sharpe
+  dsr_min: 0.0                    # deflated Sharpe must exceed this
+  cost_breakeven_min: 1.5         # must stay profitable at >= 1.5x modeled costs
+  require_delay_survival: true    # must stay profitable with +1 bar execution delay
+  min_positive_regimes: 2         # of 3 benchmark regimes (down/flat/up)
+  max_single_regime_pnl_share: 0.8
+  min_neighbor_sharpe_ratio: 0.25 # median neighbor-params Sharpe / chosen Sharpe

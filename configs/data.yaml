@@ -1,0 +1,14 @@
+# Data plane configuration.
+frequency: daily            # only legal value in v1
+benchmark_symbol: SPY
+# Symbols the `quantlab data fetch` command pulls by default. CSV import and
+# synthetic generation can add others.
+universe: [SPY, AAPL, MSFT, JNJ, XOM]
+
+validation:
+  # A curated symbol must pass every 'fail'-severity check before it can be
+  # snapshotted. 'warn' issues are logged to data_quality_log but do not block.
+  max_consecutive_gap_days: 5      # business-day gaps longer than this -> fail
+  spike_zscore: 8.0                # robust z-score of daily log return -> warn; 2x -> fail
+  min_avg_volume: 10000            # 20-day average volume below this -> warn
+  min_bars: 300                    # too-short history is unusable for validation -> fail

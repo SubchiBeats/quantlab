@@ -1,0 +1,19 @@
+# Secrets - never committed. The config loader refuses to run if .env is tracked.
+.env
+
+# Runtime state (recreated by `quantlab init`; back these up separately, do not version them)
+db/
+datastore/
+artifacts/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/

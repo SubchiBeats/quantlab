@@ -1,0 +1,8 @@
+name: rsi_meanrev
+version: 1
+universe: [AAPL, MSFT, JNJ, XOM]
+params:
+  rsi_n: 2
+  buy_below: 10
+  exit_above: 60
+  trend_sma: 200

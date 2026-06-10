@@ -1,0 +1,22 @@
+# Backtest engine configuration.
+# Hard invariants (cash account, long-only, next-bar-open fills) are enforced
+# by the schema validator - editing them to other values is a load error.
+initial_capital: 100000.0
+fill_policy: next_bar_open        # only legal value in v1
+cash_account: true                # only legal value in v1
+allow_short: false                # only legal value in v1
+
+costs:
+  commission_per_share: 0.005
+  min_commission: 1.0
+  half_spread_bps: 2.5            # half bid/ask spread, basis points of price
+  impact_coeff: 0.1               # extra slippage fraction of participation (qty/ADV)
+  # Costs are multiplied by this. Values below 1.0 are rejected by the loader:
+  # a strategy must survive OVERSTATED costs to pass.
+  pessimism_multiplier: 1.5
+
+sizing:
+  risk_per_trade_pct: 0.5         # % of equity at risk between entry and protective stop
+  atr_period: 14
+  atr_stop_mult: 3.0              # protective stop = entry - atr_stop_mult * ATR
+  max_position_pct: 10.0          # max position value as % of equity

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuantLab Tear Sheet - Experiment E{{ e.experiment_id }}</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; margin: 2rem auto; max-width: 1080px;
+         color: #1a1a2e; background: #fafafa; line-height: 1.45; }
+  h1 { font-size: 1.5rem; border-bottom: 3px solid #16213e; padding-bottom: .4rem; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; color: #16213e; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .85rem; }
+  th, td { border: 1px solid #d8d8e0; padding: .35rem .6rem; text-align: right; }
+  th { background: #16213e; color: #fff; text-align: left; }
+  td:first-child, th:first-child { text-align: left; }
+  .verdict { display: inline-block; padding: .3rem 1rem; border-radius: 4px; font-weight: 700;
+             font-size: 1.1rem; color: #fff; }
+  .pass { background: #2e7d32; } .fail { background: #c62828; }
+  .gate-pass { color: #2e7d32; font-weight: 600; } .gate-fail { color: #c62828; font-weight: 600; }
+  .banner { background: #fff3cd; border: 1px solid #ffc107; padding: .6rem 1rem;
+            border-radius: 4px; margin: 1rem 0; font-size: .85rem; }
+  .meta { font-size: .75rem; color: #555; }
+  img { max-width: 100%; border: 1px solid #d8d8e0; margin: .4rem 0; }
+  footer { margin-top: 2.5rem; border-top: 1px solid #ccc; padding-top: .6rem;
+           font-size: .7rem; color: #777; font-family: Consolas, monospace; }
+  ul { font-size: .9rem; }
+  blockquote { border-left: 4px solid #16213e; margin: .4rem 0; padding: .2rem 1rem;
+               background: #fff; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>QuantLab Tear Sheet &mdash; Experiment E{{ e.experiment_id }}</h1>
+<p>
+  <span class="verdict {{ e.verdict }}">{{ e.verdict | upper }}</span>
+  &nbsp; <strong>{{ e.strategy_name }}@{{ e.strategy_version }}</strong>
+  on snapshot <code>{{ e.snapshot_id }}</code>, benchmark {{ e.benchmark_symbol }}
+</p>
+{% if e.verdict == 'fail' %}<p><strong>Rejection reasons:</strong> {{ e.verdict_reason }}</p>{% endif %}
+
+<div class="banner">
+  Research artifact, not investment advice. Risk-free rate assumed 0; costs include a
+  {{ pessimism }}x pessimism multiplier. Backtested and out-of-sample results are estimates
+  on historical data; they systematically overstate live performance.
+  {% if synthetic %}<strong>THIS REPORT USES SYNTHETIC (DEVELOPMENT) DATA - results are
+  meaningless for research conclusions.</strong>{% endif %}
+</div>
+
+<h2>Hypothesis (pre-registered)</h2>
+<blockquote>
+  <p><strong>H{{ h.hypothesis_id }} ({{ h.family }})</strong>: {{ h.statement }}</p>
+  <p><em>Mechanism:</em> {{ h.mechanism }}</p>
+  <p><em>Success criteria:</em> {{ h.success_criteria }}</p>
+  <p><em>Falsification criteria:</em> {{ h.falsification_criteria }}</p>
+  <p class="meta">Registered {{ h.created_at }} by {{ h.author }}.
+     Prior trials in this family before this experiment: {{ prior_trials }}.</p>
+</blockquote>
+
+<h2>Validation gates</h2>
+<table>
+  <tr><th>Gate</th><th>Measured</th><th>Threshold</th><th>Result</th><th>Meaning</th></tr>
+  {% for g in gates %}
+  <tr>
+    <td>{{ g.name }}</td>
+    <td>{{ "%.4g" | format(g.measured) }}</td>
+    <td>{{ "%.4g" | format(g.threshold) }}</td>
+    <td class="{{ 'gate-pass' if g.passed else 'gate-fail' }}">{{ 'PASS' if g.passed else 'FAIL' }}</td>
+    <td style="text-align:left">{{ g.detail }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Performance &mdash; full sample vs out-of-sample vs benchmark</h2>
+<table>
+  <tr><th>Metric</th><th>Full sample</th><th>Out-of-sample (walk-forward)</th><th>Benchmark (buy &amp; hold)</th></tr>
+  {% for row in perf_rows %}
+  <tr><td>{{ row.label }}</td><td>{{ row.full }}</td><td>{{ row.oos }}</td><td>{{ row.bench }}</td></tr>
+  {% endfor %}
+</table>
+<p class="meta">Out-of-sample numbers are stitched walk-forward test segments only;
+they are the evidentiary result. Full-sample numbers use fixed configured parameters.</p>
+
+{% if chart_equity %}<h2>Equity curves (full sample, log scale)</h2>
+<img src="data:image/png;base64,{{ chart_equity }}" alt="equity curves">{% endif %}
+{% if chart_dd %}<h2>Drawdown (full sample)</h2>
+<img src="data:image/png;base64,{{ chart_dd }}" alt="drawdown">{% endif %}
+{% if chart_oos %}<h2>Out-of-sample cumulative return (stitched test segments)</h2>
+<img src="data:image/png;base64,{{ chart_oos }}" alt="OOS cumulative return">{% endif %}
+
+<h2>Walk-forward folds</h2>
+<table>
+  <tr><th>Fold</th><th>Train window</th><th>Test window</th><th>Chosen params</th>
+      <th>Train Sharpe</th><th>Test Sharpe</th><th>Test return</th><th>Test trades</th></tr>
+  {% for f in folds %}
+  <tr>
+    <td>{{ f.fold_n }}</td>
+    <td>{{ f.train_start }} &rarr; {{ f.train_end }}</td>
+    <td>{{ f.test_start }} &rarr; {{ f.test_end }}</td>
+    <td style="text-align:left"><code>{{ f.chosen_params_json }}</code></td>
+    <td>{{ f.train_sharpe is not none and "%.2f" | format(f.train_sharpe) or "n/a" }}</td>
+    <td>{{ f.test_sharpe is not none and "%.2f" | format(f.test_sharpe) or "n/a" }}</td>
+    <td>{{ f.test_return is not none and "%.2f%%" | format(f.test_return * 100) or "n/a" }}</td>
+    <td>{{ f.test_trades }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Monte Carlo results</h2>
+{% for mc in mc_blocks %}
+<h3 style="font-size:.95rem">{{ mc.title }}</h3>
+{{ mc.html | safe }}
+{% endfor %}
+
+<h2>Regime analysis (benchmark-derived: down / flat / up)</h2>
+<table>
+  <tr><th>Regime</th><th>Net P&amp;L (USD)</th><th>Trades</th></tr>
+  {% for name, r in regimes.items() %}
+  <tr><td>{{ name }}</td><td>{{ "%.2f" | format(r.pnl) }}</td><td>{{ r.n_trades | int }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Strategy weaknesses &amp; failure scenarios</h2>
+<ul>
+  {% for w in weaknesses %}<li>{{ w }}</li>{% endfor %}
+</ul>
+
+<footer>
+  experiment E{{ e.experiment_id }} | hypothesis H{{ h.hypothesis_id }} |
+  snapshot {{ e.snapshot_id }} | config {{ config_hash }} |
+  git {{ git_sha }}{{ " (DIRTY TREE - not promotable)" if dirty_tree }} |
+  engine v{{ engine_version }} | generated {{ generated_at }} by QuantLab.
+  Every number above is re-derivable from the research vault using these identifiers.
+</footer>
+</body>
+</html>
