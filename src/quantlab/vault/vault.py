@@ -300,3 +300,28 @@ def family_prior_trials(
         params.append(exclude_experiment)
     row = conn.execute(sql, params).fetchone()
     return int(row["trials"] or 0)
+
+
+def family_prior_configs(
+    conn: sqlite3.Connection, family: str, exclude_experiment: int | None = None
+) -> int:
+    """Sum of DISTINCT configurations tried across prior experiments in a family.
+
+    This - not the grid x fold evaluation count - is the correct multiple-testing
+    N for the deflated Sharpe ratio: it counts how many distinct strategy
+    hypotheses have been selected among on this data. Every past attempt at the
+    same vein of research still raises the bar for the next one, but walk-forward
+    folds (a validation method) do not inflate it."""
+    sql = (
+        "SELECT COALESCE(SUM(m.value), 0) AS cfgs FROM run_metrics m "
+        "JOIN runs r ON r.run_id = m.run_id "
+        "JOIN experiments e ON e.experiment_id = r.experiment_id "
+        "JOIN hypotheses h ON h.hypothesis_id = e.hypothesis_id "
+        "WHERE m.metric = 'n_configs' AND r.run_type = 'walkforward' AND h.family = ?"
+    )
+    params: list[Any] = [family.strip()]
+    if exclude_experiment is not None:
+        sql += " AND e.experiment_id != ?"
+        params.append(exclude_experiment)
+    row = conn.execute(sql, params).fetchone()
+    return int(row["cfgs"] or 0)

@@ -166,6 +166,7 @@ def run_experiment(
         "is_sharpe_mean": wf.is_sharpe_mean,
         "param_stability": wf.param_stability,
         "n_trials": float(wf.n_trials),
+        "n_configs": float(wf.n_configs),
         "n_folds": float(len(wf.folds)),
     }
     oos_metrics.update(oos_trade_metrics)
@@ -222,11 +223,15 @@ def run_experiment(
     regime_table = regime_pnl(wf.oos_trades, regimes)
 
     # ---- 6. deflated Sharpe with family accounting ----
+    # N for the deflated Sharpe = number of DISTINCT strategy configurations
+    # selected among, accumulated across this hypothesis family. Walk-forward
+    # re-evaluates the same configs on many rolling windows; those folds are a
+    # validation method, NOT additional hypotheses, so they must not multiply N.
     hyp = conn.execute(
         "SELECT family FROM hypotheses WHERE hypothesis_id = ?", (hypothesis_id,)
     ).fetchone()
-    prior_trials = vault.family_prior_trials(conn, hyp["family"], exclude_experiment=experiment_id)
-    dsr = deflated_sharpe(wf.oos_returns, wf.n_trials + prior_trials, wf.trial_sharpes)
+    prior_configs = vault.family_prior_configs(conn, hyp["family"], exclude_experiment=experiment_id)
+    dsr = deflated_sharpe(wf.oos_returns, wf.n_configs + prior_configs, wf.trial_sharpes)
 
     # ---- 7. gates -> verdict ----
     report = evaluate_gates(
@@ -249,7 +254,8 @@ def run_experiment(
         "reasons": report.reasons,
         "weaknesses": report.weaknesses,
         "dsr": dsr,
-        "prior_family_trials": prior_trials,
+        "dsr_n_configs": wf.n_configs + prior_configs,
+        "prior_family_trials": prior_configs,
         "regimes": regime_table,
         "gates": [
             {"name": g.name, "passed": g.passed, "measured": g.measured,

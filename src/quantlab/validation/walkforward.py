@@ -55,8 +55,9 @@ class WalkForwardResult:
     is_sharpe_mean: float            # mean train Sharpe of chosen params
     oos_sharpe: float
     wf_efficiency: float             # oos_sharpe / is_sharpe_mean (0 if IS <= 0)
-    n_trials: int                    # total (combo x fold) evaluations, for DSR
-    trial_sharpes: list[float]       # train Sharpes of ALL evaluated combos
+    n_trials: int                    # total (combo x fold) evaluations (compute cost, transparency)
+    n_configs: int                   # DISTINCT configurations selected among (the DSR trial count)
+    trial_sharpes: list[float]       # train Sharpes of ALL evaluated combos (spread -> DSR variance)
     chosen_params_per_fold: list[dict[str, Any]] = field(default_factory=list)
 
     @property
@@ -168,6 +169,7 @@ def run_walkforward(market: MarketData, cfg: AppConfig) -> WalkForwardResult:
         oos_sharpe=float(oos_sharpe),
         wf_efficiency=float(efficiency),
         n_trials=n_trials,
+        n_configs=len(grid),
         trial_sharpes=trial_sharpes,
         chosen_params_per_fold=[f.chosen_params for f in folds],
     )
